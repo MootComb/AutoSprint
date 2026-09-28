@@ -3,7 +3,8 @@ name: Release
 on:
   push:
     branches:
-      - 1.17.x
+      - main
+      - master
   workflow_dispatch:
     inputs:
       version:
@@ -44,7 +45,7 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Build with Gradle
-        run: ./gradlew clean build --no-daemon
+        run: ./gradlew clean build --no-daemon --stacktrace
 
       - name: Read mod version from gradle.properties
         id: mod_version
