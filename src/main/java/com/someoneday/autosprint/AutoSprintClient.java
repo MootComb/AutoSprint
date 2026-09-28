@@ -15,6 +15,8 @@ public class AutoSprintClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		AutoSprintManager.load();
+
 		toggleKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
 				"key.autosprint.toggle",
 				InputConstants.Type.KEYSYM,
@@ -27,7 +29,9 @@ public class AutoSprintClient implements ClientModInitializer {
 				boolean enabled = AutoSprintManager.toggle();
 				if (client.player != null) {
 					client.player.displayClientMessage(
-							new TranslatableComponent(enabled ? "message.autosprint.enabled" : "message.autosprint.disabled"),
+							new TranslatableComponent(enabled
+									? "message.autosprint.enabled"
+									: "message.autosprint.disabled"),
 							true
 					);
 				}
