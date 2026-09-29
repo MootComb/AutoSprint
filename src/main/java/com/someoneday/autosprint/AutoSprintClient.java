@@ -20,7 +20,7 @@ public class AutoSprintClient implements ClientModInitializer {
 		toggleKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
 				"key.autosprint.toggle",
 				InputConstants.Type.KEYSYM,
-				GLFW.GLFW_KEY_V,
+				GLFW.GLFW_KEY_N,
 				"category.autosprint"
 		));
 
