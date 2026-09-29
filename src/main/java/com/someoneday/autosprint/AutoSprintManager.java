@@ -3,7 +3,6 @@ package com.someoneday.autosprint;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.world.effect.MobEffects;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,6 +12,9 @@ import java.util.Properties;
 public final class AutoSprintManager {
 	private static final Path CONFIG_PATH =
 			FabricLoader.getInstance().getConfigDir().resolve("autosprint.properties");
+
+	/** Forward impulse threshold. Vanilla considers sprint valid only when moving forward. */
+	private static final float FORWARD_THRESHOLD = 0.8F;
 
 	private static boolean enabled = true;
 
@@ -59,46 +61,61 @@ public final class AutoSprintManager {
 	}
 
 	public static void tick(Minecraft client) {
-		if (!enabled) {
-			return;
-		}
-
 		LocalPlayer player = client.player;
 		if (player == null || player.input == null) {
 			return;
 		}
 
-		if (!shouldMoveForward(client, player)) {
-			return;
-		}
-
-		if (!canSprint(player)) {
-			return;
-		}
-
-		player.setSprinting(true);
+		// Always set exactly what it should be, not just force true.
+		player.setSprinting(enabled && shouldSprint(player));
 	}
 
-	private static boolean shouldMoveForward(Minecraft client, LocalPlayer player) {
-		if (client.options.keyUp.isDown()) {
-			return true;
+	/**
+	 * Legit sprint conditions. Mirrors what LocalPlayer itself does
+	 * so we don't fight vanilla's sprint reset logic.
+	 */
+	private static boolean shouldSprint(LocalPlayer player) {
+		// Player must be moving forward (zza), not sideways/backwards.
+		// forwardImpulse in 1.17 is the equivalent of zza.
+		if (player.input.forwardImpulse <= FORWARD_THRESHOLD) {
+			return false;
 		}
-		return player.input.forwardImpulse > 0.0F;
-	}
 
-	private static boolean canSprint(LocalPlayer player) {
-		if (player.isCrouching() || player.isFallFlying() || player.isPassenger()) {
+		// Sneaking — no sprint.
+		if (player.isCrouching()) {
 			return false;
 		}
-		if (player.isUsingItem() && !player.isPassenger()) {
+
+		// Passenger — let the vehicle decide.
+		if (player.isPassenger()) {
 			return false;
 		}
-		if (player.hasEffect(MobEffects.BLINDNESS)) {
+
+		// Elytra / flight — no sprint.
+		if (player.isFallFlying() || player.getAbilities().flying) {
 			return false;
 		}
-		if (player.getFoodData().getFoodLevel() <= 6 && !player.getAbilities().flying) {
+
+		// Using an item (eating, bow, shield) slows you down — sprint is reset.
+		if (player.isUsingItem()) {
 			return false;
 		}
+
+		// Water/lava — vanilla behaves differently, legit mode just disables sprint.
+		if (player.isInWater() || player.isInLava()) {
+			return false;
+		}
+
+		// Vanilla gates: hunger, effects (blindness, etc.).
+		if (player.isMobilityRestricted()) {
+			return false;
+		}
+
+		// Hit a wall — vanilla resets sprint.
+		if (player.horizontalCollision) {
+			return false;
+		}
+
 		return true;
 	}
 }
