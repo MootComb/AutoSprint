@@ -3,6 +3,7 @@ package com.someoneday.autosprint;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.effect.MobEffects;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -71,12 +72,11 @@ public final class AutoSprintManager {
 	}
 
 	/**
-	 * Legit sprint conditions. Mirrors what LocalPlayer itself does
-	 * so we don't fight vanilla's sprint reset logic.
+	 * Legit sprint conditions for 1.17.1.
+	 * Mirrors what LocalPlayer itself does so we don't fight vanilla's sprint reset logic.
 	 */
 	private static boolean shouldSprint(LocalPlayer player) {
 		// Player must be moving forward (zza), not sideways/backwards.
-		// forwardImpulse in 1.17 is the equivalent of zza.
 		if (player.input.forwardImpulse <= FORWARD_THRESHOLD) {
 			return false;
 		}
@@ -106,8 +106,15 @@ public final class AutoSprintManager {
 			return false;
 		}
 
-		// Vanilla gates: hunger, effects (blindness, etc.).
-		if (player.isMobilityRestricted()) {
+		// Vanilla 1.17.1 mobility restriction checks:
+		// blindness effect blocks sprinting.
+		if (player.hasEffect(MobEffects.BLINDNESS)) {
+			return false;
+		}
+
+		// Hunger: need more than 6 food points to sprint.
+		// Creative mode ignores hunger, so skip the check there.
+		if (!player.isCreative() && player.getFoodData().getFoodLevel() <= 6) {
 			return false;
 		}
 
