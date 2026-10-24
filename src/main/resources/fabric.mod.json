@@ -15,6 +15,9 @@
 			"com.someoneday.autosprint.AutoSprintClient"
 		]
 	},
+    "mixins": [
+      "autosprint.mixins.json"
+    ],
 	"depends": {
 		"fabricloader": "*",
 		"minecraft": ">=1.17- <1.18",
