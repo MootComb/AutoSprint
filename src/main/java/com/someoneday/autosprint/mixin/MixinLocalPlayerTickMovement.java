@@ -10,8 +10,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LocalPlayer.class)
 public abstract class MixinLocalPlayerTickMovement {
 
-    @Inject(method = "tickMovement", at = @At("HEAD"))
-    private void autosprint$beforeTickMovement(CallbackInfo ci) {
+    @Inject(method = "aiStep", at = @At("HEAD"))
+    private void autosprint$beforeAiStep(CallbackInfo ci) {
         AutoSprintManager.onClientMove((LocalPlayer) (Object) this);
     }
 }
