@@ -14,10 +14,21 @@ public final class AutoSprintManager {
 	private static final Path CONFIG_PATH =
 			FabricLoader.getInstance().getConfigDir().resolve("autosprint.properties");
 
-	/** Forward impulse threshold. Vanilla considers sprint valid only when moving forward. */
-	private static final float FORWARD_THRESHOLD = 0.8F;
+	/**
+	 * Forward impulse threshold. Vanilla considers sprint valid only when moving forward.
+	 * Lowered from 0.8F to 0.5F because input interpolation makes the raw value
+	 * fluctuate between ~0.7 and 1.0 while walking, which caused sprint to flicker.
+	 */
+	private static final float FORWARD_THRESHOLD = 0.5F;
 
 	private static boolean enabled = true;
+
+	/**
+	 * Cached last applied sprint state. Used to avoid calling setSprinting()
+	 * every tick with the same value, which causes FOV jitter and stuttering.
+	 * null means "no decision yet" (e.g. just after toggle or leaving water).
+	 */
+	private static Boolean lastSprintState = null;
 
 	private AutoSprintManager() {
 	}
@@ -28,6 +39,8 @@ public final class AutoSprintManager {
 
 	public static boolean toggle() {
 		enabled = !enabled;
+		// Reset cache so the next tick re-applies the correct state cleanly.
+		lastSprintState = null;
 		save();
 		return enabled;
 	}
@@ -65,6 +78,7 @@ public final class AutoSprintManager {
 		// When the mod is disabled, do nothing at all.
 		// Do not touch sprint state — let the player sprint manually.
 		if (!enabled) {
+			lastSprintState = null;
 			return;
 		}
 
@@ -73,13 +87,21 @@ public final class AutoSprintManager {
 			return;
 		}
 
-		// In water do not touch sprint at all — let vanilla handle it.
+		// In water, hand control back to vanilla entirely.
+		// Vanilla handles swim-sprint itself; interfering here breaks swimming.
 		if (player.isInWater()) {
+			lastSprintState = null;
 			return;
 		}
 
-		// Always set exactly what it should be, not just force true.
-		player.setSprinting(shouldSprint(player));
+		boolean should = shouldSprint(player);
+
+		// Only call setSprinting when the state actually changes.
+		// Calling it every tick with the same value causes FOV jitter / stutter.
+		if (lastSprintState == null || lastSprintState != should) {
+			player.setSprinting(should);
+			lastSprintState = should;
+		}
 	}
 
 	/**
@@ -127,10 +149,10 @@ public final class AutoSprintManager {
 			return false;
 		}
 
-		// Hit a wall — vanilla resets sprint.
-		if (player.horizontalCollision) {
-			return false;
-		}
+		// NOTE: horizontalCollision check removed on purpose.
+		// It flickers true/false on uneven terrain (stairs, slabs, edges),
+		// which made sprint toggle every tick and caused screen stutter.
+		// Vanilla already resets sprint on wall hits by itself.
 
 		return true;
 	}
