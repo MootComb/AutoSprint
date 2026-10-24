@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "com.someoneday.autosprint.mixin",
+  "compatibilityLevel": "JAVA_16",
+  "client": [
+    "MixinLocalPlayerTickMovement"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
