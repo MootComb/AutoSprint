@@ -58,19 +58,23 @@ public final class AutoSprintManager {
 		}
 	}
 
-	public static void tick(Minecraft client) {
-		// When disabled, do nothing at all — let vanilla handle sprinting.
+	/**
+	 * Called from the mixin at the HEAD of LocalPlayer.tickMovement(),
+	 * i.e. BEFORE vanilla decides whether to sprint this tick.
+	 * This removes the 1-tick delay that END_CLIENT_TICK has and
+	 * makes sprint restore instantly after leaving a slab/stairs.
+	 */
+	public static void onClientMove(LocalPlayer player) {
 		if (!enabled) {
 			return;
 		}
 
-		LocalPlayer player = client.player;
-		if (player == null) {
+		Minecraft client = Minecraft.getInstance();
+		if (player != client.player) {
 			return;
 		}
 
 		// Vanilla handles these states itself. Don't interfere.
-		// Water: vanilla enables swim-sprint; forcing it here breaks swimming.
 		if (player.isInWater()) {
 			return;
 		}
@@ -83,50 +87,36 @@ public final class AutoSprintManager {
 
 		// Only ever push sprint ON. Never force it OFF.
 		// Vanilla resets sprint itself on wall hit, hunger, item use, sneak, etc.
-		// Writing `false` every tick is what causes FOV jitter and stutter.
 		if (!player.isSprinting() && shouldSprint(client, player)) {
 			player.setSprinting(true);
 		}
 	}
 
-	/**
-	 * Mirrors what vanilla considers a valid sprint, minus the checks that
-	 * flicker (horizontalCollision, interpolated forwardImpulse).
-	 */
 	private static boolean shouldSprint(Minecraft client, LocalPlayer player) {
-		// Use the raw key press, not `input.forwardImpulse` (which is
-		// interpolated and flickers around 0 while starting/stopping).
+		// Raw key press, not `input.forwardImpulse` (interpolated, flickers).
 		if (!client.options.keyUp.isDown()) {
 			return false;
 		}
 
-		// Sneaking — no sprint.
 		if (player.isCrouching()) {
 			return false;
 		}
 
-		// Using an item (eating, bow, shield) slows you down — sprint is reset.
 		if (player.isUsingItem()) {
 			return false;
 		}
 
-		// Vanilla 1.17.1 mobility restriction checks:
-		// blindness effect blocks sprinting.
 		if (player.hasEffect(MobEffects.BLINDNESS)) {
 			return false;
 		}
 
-		// Hunger check — skipped in creative and spectator, since those modes
-		// don't consume food and the player should still be able to sprint.
 		if (!player.isCreative() && !player.isSpectator()
 				&& player.getFoodData().getFoodLevel() <= 6) {
 			return false;
 		}
 
-		// NOTE: no horizontalCollision check on purpose.
-		// It flickers true/false on uneven terrain (stairs, slabs, edges),
-		// which made sprint toggle every tick and caused screen stutter.
-		// Vanilla already resets sprint on wall hits by itself.
+		// No horizontalCollision check — vanilla resets sprint itself,
+		// and checking it here causes flicker on stairs/slabs/edges.
 
 		return true;
 	}
