@@ -36,8 +36,8 @@ public class AutoSprintClient implements ClientModInitializer {
 					);
 				}
 			}
-
-			AutoSprintManager.tick(client);
+			// NOTE: no AutoSprintManager.tick(client) here.
+			// Sprint logic runs from MixinLocalPlayerTickMovement.
 		});
 	}
 }
