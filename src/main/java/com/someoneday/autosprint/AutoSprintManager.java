@@ -1,9 +1,9 @@
 package com.someoneday.autosprint;
 
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.effect.MobEffects;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -58,26 +58,26 @@ public final class AutoSprintManager {
 		}
 	}
 
-	public static void tick(MinecraftClient client) {
+	public static void tick(Minecraft client) {
 		// When disabled, do nothing at all — let vanilla handle sprinting.
 		if (!enabled) {
 			return;
 		}
 
-		ClientPlayerEntity player = client.player;
+		LocalPlayer player = client.player;
 		if (player == null) {
 			return;
 		}
 
 		// Vanilla handles these states itself. Don't interfere.
 		// Water: vanilla enables swim-sprint; forcing it here breaks swimming.
-		if (player.isTouchingWater()) {
+		if (player.isInWater()) {
 			return;
 		}
 		if (player.isFallFlying()) {
 			return;
 		}
-		if (player.hasVehicle()) {
+		if (player.isPassenger()) {
 			return;
 		}
 
@@ -93,15 +93,15 @@ public final class AutoSprintManager {
 	 * Mirrors what vanilla considers a valid sprint, minus the checks that
 	 * flicker (horizontalCollision, interpolated forwardImpulse).
 	 */
-	private static boolean shouldSprint(MinecraftClient client, ClientPlayerEntity player) {
-		// Use the raw key press, not `input.movementForward` (which is
+	private static boolean shouldSprint(Minecraft client, LocalPlayer player) {
+		// Use the raw key press, not `input.forwardImpulse` (which is
 		// interpolated and flickers around 0 while starting/stopping).
-		if (!client.options.keyForward.isPressed()) {
+		if (!client.options.keyUp.isDown()) {
 			return false;
 		}
 
 		// Sneaking — no sprint.
-		if (player.isSneaking()) {
+		if (player.isCrouching()) {
 			return false;
 		}
 
@@ -112,14 +112,14 @@ public final class AutoSprintManager {
 
 		// Vanilla 1.17.1 mobility restriction checks:
 		// blindness effect blocks sprinting.
-		if (player.hasStatusEffect(StatusEffects.BLINDNESS)) {
+		if (player.hasEffect(MobEffects.BLINDNESS)) {
 			return false;
 		}
 
 		// Hunger check — skipped in creative and spectator, since those modes
 		// don't consume food and the player should still be able to sprint.
 		if (!player.isCreative() && !player.isSpectator()
-				&& player.getHungerManager().getFoodLevel() <= 6) {
+				&& player.getFoodData().getFoodLevel() <= 6) {
 			return false;
 		}
 
