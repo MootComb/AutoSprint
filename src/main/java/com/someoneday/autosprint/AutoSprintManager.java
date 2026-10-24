@@ -1,9 +1,9 @@
 package com.someoneday.autosprint;
 
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.world.effect.MobEffects;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.entity.effect.StatusEffects;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -14,21 +14,7 @@ public final class AutoSprintManager {
 	private static final Path CONFIG_PATH =
 			FabricLoader.getInstance().getConfigDir().resolve("autosprint.properties");
 
-	/**
-	 * Forward impulse threshold. Vanilla considers sprint valid only when moving forward.
-	 * Lowered from 0.8F to 0.5F because input interpolation makes the raw value
-	 * fluctuate between ~0.7 and 1.0 while walking, which caused sprint to flicker.
-	 */
-	private static final float FORWARD_THRESHOLD = 0.5F;
-
 	private static boolean enabled = true;
-
-	/**
-	 * Cached last applied sprint state. Used to avoid calling setSprinting()
-	 * every tick with the same value, which causes FOV jitter and stuttering.
-	 * null means "no decision yet" (e.g. just after toggle or leaving water).
-	 */
-	private static Boolean lastSprintState = null;
 
 	private AutoSprintManager() {
 	}
@@ -39,8 +25,6 @@ public final class AutoSprintManager {
 
 	public static boolean toggle() {
 		enabled = !enabled;
-		// Reset cache so the next tick re-applies the correct state cleanly.
-		lastSprintState = null;
 		save();
 		return enabled;
 	}
@@ -74,60 +58,50 @@ public final class AutoSprintManager {
 		}
 	}
 
-	public static void tick(Minecraft client) {
-		// When the mod is disabled, do nothing at all.
-		// Do not touch sprint state — let the player sprint manually.
+	public static void tick(MinecraftClient client) {
+		// When disabled, do nothing at all — let vanilla handle sprinting.
 		if (!enabled) {
-			lastSprintState = null;
 			return;
 		}
 
-		LocalPlayer player = client.player;
-		if (player == null || player.input == null) {
+		ClientPlayerEntity player = client.player;
+		if (player == null) {
 			return;
 		}
 
-		// In water, hand control back to vanilla entirely.
-		// Vanilla handles swim-sprint itself; interfering here breaks swimming.
-		if (player.isInWater()) {
-			lastSprintState = null;
+		// Vanilla handles these states itself. Don't interfere.
+		// Water: vanilla enables swim-sprint; forcing it here breaks swimming.
+		if (player.isTouchingWater()) {
+			return;
+		}
+		if (player.isFallFlying()) {
+			return;
+		}
+		if (player.hasVehicle()) {
 			return;
 		}
 
-		boolean should = shouldSprint(player);
-
-		// Only call setSprinting when the state actually changes.
-		// Calling it every tick with the same value causes FOV jitter / stutter.
-		if (lastSprintState == null || lastSprintState != should) {
-			player.setSprinting(should);
-			lastSprintState = should;
+		// Only ever push sprint ON. Never force it OFF.
+		// Vanilla resets sprint itself on wall hit, hunger, item use, sneak, etc.
+		// Writing `false` every tick is what causes FOV jitter and stutter.
+		if (!player.isSprinting() && shouldSprint(client, player)) {
+			player.setSprinting(true);
 		}
 	}
 
 	/**
-	 * Legit sprint conditions for 1.17.1.
-	 * Mirrors what LocalPlayer itself does so we don't fight vanilla's sprint reset logic.
-	 * Sprint is allowed in creative and spectator (flying included), so the only
-	 * exclusions are things that genuinely break movement.
+	 * Mirrors what vanilla considers a valid sprint, minus the checks that
+	 * flicker (horizontalCollision, interpolated forwardImpulse).
 	 */
-	private static boolean shouldSprint(LocalPlayer player) {
-		// Player must be moving forward (zza), not sideways/backwards.
-		if (player.input.forwardImpulse <= FORWARD_THRESHOLD) {
+	private static boolean shouldSprint(MinecraftClient client, ClientPlayerEntity player) {
+		// Use the raw key press, not `input.movementForward` (which is
+		// interpolated and flickers around 0 while starting/stopping).
+		if (!client.options.keyForward.isPressed()) {
 			return false;
 		}
 
 		// Sneaking — no sprint.
-		if (player.isCrouching()) {
-			return false;
-		}
-
-		// Passenger — let the vehicle decide.
-		if (player.isPassenger()) {
-			return false;
-		}
-
-		// Elytra gliding — no sprint (this is not the same as creative flight).
-		if (player.isFallFlying()) {
+		if (player.isSneaking()) {
 			return false;
 		}
 
@@ -138,18 +112,18 @@ public final class AutoSprintManager {
 
 		// Vanilla 1.17.1 mobility restriction checks:
 		// blindness effect blocks sprinting.
-		if (player.hasEffect(MobEffects.BLINDNESS)) {
+		if (player.hasStatusEffect(StatusEffects.BLINDNESS)) {
 			return false;
 		}
 
 		// Hunger check — skipped in creative and spectator, since those modes
 		// don't consume food and the player should still be able to sprint.
 		if (!player.isCreative() && !player.isSpectator()
-				&& player.getFoodData().getFoodLevel() <= 6) {
+				&& player.getHungerManager().getFoodLevel() <= 6) {
 			return false;
 		}
 
-		// NOTE: horizontalCollision check removed on purpose.
+		// NOTE: no horizontalCollision check on purpose.
 		// It flickers true/false on uneven terrain (stairs, slabs, edges),
 		// which made sprint toggle every tick and caused screen stutter.
 		// Vanilla already resets sprint on wall hits by itself.
